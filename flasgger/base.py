@@ -9,12 +9,12 @@ we add the endpoint to swagger specification output
 import re
 import os
 import codecs
+import jsonschema
 import yaml
 try:
     import simplejson as json
 except ImportError:
     import json
-
 from functools import wraps
 from collections import defaultdict
 from flask import Blueprint
@@ -287,9 +287,8 @@ class Swagger(object):
         "specs_route": "/apidocs/"
     }
 
-    def __init__(self, app=None, config=None,
-                 sanitizer=None, template=None, template_file=None,
-                 decorators=None):
+    def __init__(self, app=None, config=None, sanitizer=None, template=None,
+                 template_file=None, decorators=None, validate_function=None):
         self._configured = False
         self.endpoints = []
         self.definition_models = []  # not in app, so track here
@@ -298,6 +297,7 @@ class Swagger(object):
         self.template = template
         self.template_file = template_file
         self.decorators = decorators
+        self.validate_function = validate_function or jsonschema.validate
         if app:
             self.init_app(app)
 
@@ -437,7 +437,7 @@ class Swagger(object):
                 response.headers[header] = value
             return response
 
-    def validate(self, schema_id):
+    def validate(self, schema_id, validate_function=None):
         """
         A decorator that is used to validate incoming requests data
         against a schema
@@ -486,7 +486,9 @@ class Swagger(object):
                         if d.get('schema', {}).get('id') == schema_id:
                             specs = swag
 
-                validate(schema_id=schema_id, specs=specs)
+                validate(
+                    schema_id=schema_id, specs=specs,
+                    validate_function=validate_function)
                 return func(*args, **kwargs)
 
             return wrapper

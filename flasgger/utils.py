@@ -107,7 +107,8 @@ def get_specs(rules, ignore_verbs, optional_fields, sanitizer):
 
 
 def swag_from(specs=None, filetype=None, endpoint=None, methods=None,
-              validation=False, schema_id=None, data=None, definition=None):
+              validation=False, schema_id=None, data=None, definition=None,
+              validation_function=None):
     """
     Takes a filename.yml, a dictionary or object and loads swagger specs.
 
@@ -119,6 +120,7 @@ def swag_from(specs=None, filetype=None, endpoint=None, methods=None,
     :param schema_id: Definition id ot name to use for validation
     :param data: data to validate (default is request.json)
     :param definition: alias to schema_id
+    :param validation_function: custom validation function
     """
 
     def resolve_path(function, filepath):
@@ -182,7 +184,7 @@ def swag_from(specs=None, filetype=None, endpoint=None, methods=None,
 
 
 def validate(data=None, schema_id=None, filepath=None, root=None,
-             definition=None, specs=None):
+             definition=None, specs=None, validate_function=None):
     """
     This method is available to use YAML swagger definitions file
     or specs (dict or object) to validate data against its jsonschema.
@@ -278,8 +280,11 @@ def validate(data=None, schema_id=None, filepath=None, root=None,
         if 'id' in value:
             del value['id']
 
+    if validate_function is None:
+        validate_function = jsonschema.validate
+
     try:
-        jsonschema.validate(data, main_def)
+        validate_function(data, main_def)
     except ValidationError as e:
         abort(Response(str(e), status=400))
 
