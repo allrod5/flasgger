@@ -459,6 +459,11 @@ class Swagger(object):
         Naturally, if you use @app.route annotation it still needs to
         be the outermost annotation
 
+        As validation requires access to the request object in context,
+        in order to enable Werkzeug environment injection if the
+        *named* parameter 'env' is passed to the decorated function
+        it will be used to inject the environment and get the request
+
         :param schema_id: the id of the schema with which the data will
             be validated
 
@@ -476,7 +481,8 @@ class Swagger(object):
                 specs = get_schema_specs(schema_id, self)
                 validate(
                     schema_id=schema_id, specs=specs,
-                    validation_function=validation_function)
+                    validation_function=validation_function,
+                    env=kwargs.get('env'))
                 return func(*args, **kwargs)
 
             return wrapper

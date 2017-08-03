@@ -1,11 +1,13 @@
 """
 Example of JSON body validation in POST with various kinds of specs and views.
 """
+from werkzeug.test import EnvironBuilder
+
 try:
     from http import HTTPStatus
 except ImportError:
     import httplib as HTTPStatus
-from flask import Blueprint
+from flask import Blueprint, Request
 from flask import Flask
 from flask import jsonify
 from flask import request
@@ -32,6 +34,25 @@ def manualvalidation():
     return jsonify(data)
 
 
+@app.route("/injectable_manualvalidation", methods=['POST'])
+@swag_from("test_validation.yml")
+def injectable_manualvalidation(env=None):
+    """
+    In this example the view function permits injection of a Werkzeug
+    environment for ease of testing.
+
+    When calling validate() manually the test environment must be
+    injected into it too.
+    """
+    if env is not None:
+        data = Request(env).json
+    else:
+        data = request.json
+
+    validate(data, 'User', "test_validation.yml", env=env)
+    return jsonify(data)
+
+
 @app.route("/validateannotation", methods=['POST'])
 @swag.validate('User')
 @swag_from("test_validation.yml")
@@ -41,6 +62,26 @@ def validateannotation():
     method in which you want to validate received data
     """
     data = request.json
+    return jsonify(data)
+
+
+@app.route("/injectable_validateannotation", methods=['POST'])
+@swag.validate('User')
+@swag_from("test_validation.yml")
+def injectable_validateannotation(env=None):
+    """
+    In this example the view function permits injection of a Werkzeug
+    environment for ease of testing.
+
+    When using Swagger::validate annotation, named parameter 'env' in
+    the decorated function arguments will be queried to use if outside
+    of a request context
+    """
+    if env is not None:
+        data = Request(env).json
+    else:
+        data = request.json
+
     return jsonify(data)
 
 
@@ -63,6 +104,25 @@ def autovalidation():
                )
     """
     data = request.json
+    return jsonify(data)
+
+
+@app.route("/injectable_autovalidation", methods=['POST'])
+@swag_from("test_validation.yml", validation=True)
+def injectable_autovalidation(env=None):
+    """
+    In this example the view function permits injection of a Werkzeug
+    environment for ease of testing.
+
+    When using swag_from annotation, named parameter 'env' in the
+    decorated function arguments will be queried to use if outside of a
+    request context
+    """
+    if env is not None:
+        data = Request(env).json
+    else:
+        data = request.json
+
     return jsonify(data)
 
 
@@ -469,6 +529,21 @@ def test_swag(client, specs_data):
                 content_type='application/json')
             assert response.status_code == HTTPStatus.OK
 
+    injectables = [
+        (endpoint, view_function)
+        for endpoint, view_function in app.view_functions.items()
+        if endpoint.startswith('injectable_')]
+
+    for endpoint, view_function in injectables:
+        for rule in app.url_map.iter_rules():
+            if rule.endpoint == endpoint:
+                path = rule.rule
+        assert path
+        builder = EnvironBuilder(
+            path, method='POST', data=valid_users[0],
+            content_type='application/json', )
+        env = builder.get_environ()
+        assert view_function(env=env) == jsonify(valid_users[0])
 
 if __name__ == "__main__":
     app.run(debug=True)

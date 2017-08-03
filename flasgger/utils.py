@@ -1,21 +1,22 @@
 # coding: utf-8
 
-import copy
-import imp
-import inspect
 import os
 import re
-import jsonschema
+import imp
+import copy
 import yaml
-from six import string_types
+import inspect
+import jsonschema
 from copy import deepcopy
 from functools import wraps
+from six import string_types
 from importlib import import_module
 from collections import OrderedDict
 from flask import Response
+from flask import Request
 from flask import abort
-from flask import current_app
 from flask import request
+from flask import current_app
 from flask.views import MethodView
 from flasgger.constants import OPTIONAL_FIELDS
 from flasgger.marshmallow_apispec import SwaggerView
@@ -137,7 +138,14 @@ def swag_from(
         validation=False, schema_id=None, data=None, definition=None,
         validation_function=None):
     """
-    Takes a filename.yml, a dictionary or object and loads swagger specs.
+    Takes a filename.yml, a dictionary or object and loads swagger
+    specs.
+
+    For when validation is set to True, as validation requires access
+    to the request object in context, in order to enable Werkzeug
+    environment injection if the *named* parameter 'env' is passed to
+    the decorated function it will be used to inject the environment
+    and get the request
 
     :param specs: a filepath, a dictionary or an object
     :param filetype: yml or yaml (json and py to be implemented)
@@ -206,6 +214,7 @@ def swag_from(
                     data,
                     schema_id or definition,
                     validation_function=validation_function,
+                    env=kwargs.get('env'),
                     **validate_args
                 )
             return function(*args, **kwargs)
@@ -214,8 +223,9 @@ def swag_from(
     return decorator
 
 
-def validate(data=None, schema_id=None, filepath=None, root=None,
-             definition=None, specs=None, validation_function=None):
+def validate(
+        data=None, schema_id=None, filepath=None, root=None, definition=None,
+        specs=None, validation_function=None, env=None):
     """
     This method is available to use YAML swagger definitions file
     or specs (dict or object) to validate data against its jsonschema.
@@ -236,7 +246,18 @@ def validate(data=None, schema_id=None, filepath=None, root=None,
     :param validation_function: custom validation function which takes
         the positional arguments: data to be validated at first and
         schema to validate against at second
+    :param env: Werkzeug environment for when outside of request
+        context
     """
+    try:
+        request.data
+        req = request
+    except RuntimeError as e:
+        if env is not None:
+            req = Request(env)
+        else:
+            raise e
+
     schema_id = schema_id or definition
 
     # for backwards compatibility with function signature
@@ -244,17 +265,17 @@ def validate(data=None, schema_id=None, filepath=None, root=None,
         abort(Response('Filepath or specs is needed to validate', status=500))
 
     if data is None:
-        data = request.json  # defaults
+        data = req.json  # defaults
     elif callable(data):
-        # data=lambda: request.json
+        # data=lambda: req.json
         data = data()
 
     if not data:
         abort(Response('No data to validate', status=500))
 
     # not used anymore but kept to reuse with marshmallow
-    endpoint = request.endpoint.lower().replace('.', '_')
-    verb = request.method.lower()
+    endpoint = req.endpoint.lower().replace('.', '_')
+    verb = req.method.lower()
 
     if filepath is not None:
         if not root:

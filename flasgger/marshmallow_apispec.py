@@ -75,7 +75,8 @@ class SwaggerView(MethodView):
             specs.update(convert_schemas(specs, definitions))
             specs['definitions'] = definitions
             flasgger.utils.validate(
-                specs=specs, validation_function=self.validation_function)
+                specs=specs, validation_function=self.validation_function,
+                env=kwargs.get('env'))
         return super(SwaggerView, self).dispatch_request(*args, **kwargs)
 
 
